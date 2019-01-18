@@ -57,7 +57,10 @@ def jitter(input_data, is_training):
     return tf.cond(is_training, lambda: func(input_data), lambda: input_data)
 
 
-def wide_resnet(inputs, is_training, hps, name=None, update_batch_stats=False):
+def wide_resnet(inputs_, is_training, hps, name=None, update_batch_stats=False):
+    # 这个input的时候labeled data 和unlabeled data 要怎么传进来，还有分别有标签..可以认出来
+    # 哪一个是labeled data 哪一个是unlabeled data 是最大的问题了qwq
+    #### 貌似并不要怎么改，只要改residue
     """A wide resnet model.
 
     Based on the implementation at
@@ -90,40 +93,47 @@ def wide_resnet(inputs, is_training, hps, name=None, update_batch_stats=False):
         return tf.where(tf.less(x, 0.0), leakiness * x, x, name="leaky_relu")
 
     def _residual(
-        x, in_filter, out_filter, stride, activate_before_residual=False
+                  x, in_filter, out_filter, stride, activate_before_residual=False, #data_unlabeled  #在batch_norm的时候把labeled 和 unlabeled 一起跑
     ):
         """Residual unit with 2 sub layers."""
         if activate_before_residual:
             with tf.variable_scope("shared_activation"):
-                x = tf.contrib.layers.batch_norm(
-                    x,
+                #x_hat = 把x 和 data_unlabeled 拼在一起
+                x = tf.contrib.layers.batch_norm(  #第一个x 改成 x_hat
+                    x,  #改成x_hat
                     scale=True,
                     updates_collections=batch_norm_updates_collections,
                     is_training=is_training,
                 )
+                
+                # 蒙版，在x_hat中筛选出有标签的数据x   （这个怎么筛选就是个问题了QWQ
                 x = _relu(x, hps.lrelu_leakiness)
                 orig_x = x
         else:
             with tf.variable_scope("residual_only_activation"):
                 orig_x = x
-                x = tf.contrib.layers.batch_norm(
-                    x,
+                #x_hat = 把x 和 data_unlabeled 拼在一起
+                x = tf.contrib.layers.batch_norm(  #第一个x 改成 x_hat
+                    x, #改成x_hat
                     scale=True,
                     updates_collections=batch_norm_updates_collections,
                     is_training=is_training,
                 )
+                # 蒙版，在x_hat中筛选出有标签的数据x   （这个怎么筛选就是个问题了QWQ
                 x = _relu(x, hps.lrelu_leakiness)
 
         with tf.variable_scope("sub1"):
             x = _conv("conv1", x, 3, in_filter, out_filter, stride)
 
         with tf.variable_scope("sub2"):
-            x = tf.contrib.layers.batch_norm(
-                x,
+            #x_hat = 把x 和 data_unlabeled 拼在一起
+            x = tf.contrib.layers.batch_norm(   #第一个x 改成 x_hat
+                x,  #改成x_hat
                 scale=True,
                 updates_collections=batch_norm_updates_collections,
                 is_training=is_training,
             )
+            # 蒙版，在x_hat中筛选出有标签的数据x   （这个怎么筛选就是个问题了QWQ
             x = _relu(x, hps.lrelu_leakiness)
             x = _conv("conv2", x, 3, out_filter, out_filter, [1, 1, 1, 1])
 
@@ -133,6 +143,9 @@ def wide_resnet(inputs, is_training, hps, name=None, update_batch_stats=False):
                     "conv1x1", orig_x, 1, in_filter, out_filter, stride
                 )
             x += orig_x
+            ## res_y = y_true - y_estimate
+            ## thus  y_true = res_y + y_estimate
+            ## thus x += orig_x
 
         tf.logging.debug("image after unit %s", x.get_shape())
         return x
@@ -193,6 +206,7 @@ def wide_resnet(inputs, is_training, hps, name=None, update_batch_stats=False):
                 x = res_func(x, filters[3], filters[3], [1, 1, 1, 1], False)
 
         with tf.variable_scope("unit_last"):
+            # 这个with 语句怎么用哇... 还有这些unit什么呀...
             x = tf.contrib.layers.batch_norm(
                 x,
                 scale=True,
