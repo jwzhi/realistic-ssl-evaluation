@@ -76,14 +76,12 @@ class SSLFramework(object):
         self.is_training = tf.placeholder(
             dtype=tf.bool, shape=[], name="is_training"
         )
-        labeled_mask = tf.not_equal(-1, labels)
-        masked_inputs = tf.boolean_mask(self.inputs, labeled_mask)
 
         if zca_input_file_path:
             logging.info(
                 "Normalizing images with stats from: %s", zca_input_file_path
             )
-            self.processed_images = masked_inputs
+            self.processed_images = self.inputs
 
             # A two step process that does the same as the
             # cifar_unnormalized -> cifar10 conversion process
@@ -100,7 +98,7 @@ class SSLFramework(object):
                 self.processed_images, zca_input_file_path
             )
         else:
-            self.processed_images = masked_inputs
+            self.processed_images = self.inputs
 
         # logits is always the clean network output, and is what is used to evaluate the model.
         #
@@ -111,7 +109,7 @@ class SSLFramework(object):
             self.prediction()
         )
 
-
+        labeled_mask = tf.not_equal(-1, labels)
         masked_logits = tf.boolean_mask(self.logits, labeled_mask)
         masked_labels = tf.boolean_mask(self.labels, labeled_mask)
 
@@ -124,7 +122,7 @@ class SSLFramework(object):
             )
         )
 
-        num_total_examples = tf.reduce_sum(labeled_mask)
+        num_total_examples = tf.shape(self.inputs)[0]
         self.labeled_loss = tf.reduce_sum(
             tf.nn.sparse_softmax_cross_entropy_with_logits(
                 logits=masked_logits, labels=masked_labels
@@ -174,7 +172,7 @@ class SSLFramework(object):
 
         self.cons_multiplier = cons_multiplier * self.hps.max_cons_multiplier
 
-#cons_mask = tf.equal(-1, self.labels)
+        cons_mask = tf.equal(-1, self.labels)
         ###########################################################
         
         #      self.cons_loss = ssl_utils.diff_costs(
