@@ -174,6 +174,25 @@ class SSLFramework(object):
 
         self.cons_multiplier = cons_multiplier * self.hps.max_cons_multiplier
 
+#cons_mask = tf.equal(-1, self.labels)
+        ###########################################################
+        
+        #      self.cons_loss = ssl_utils.diff_costs(
+        #           self.hps.consistency_func,
+            #          cons_mask,
+            #         self.logits_student,
+            #         self.logits_teacher,
+            #         self.cons_multiplier,
+            #       )
+        #
+#            self.ent_loss = ssl_utils.entropy_penalty(
+#            self.logits_student,
+#            tf.constant(self.hps.entropy_penalty_multiplier),
+#            cons_mask,
+#       )
+
+#        self.total_loss = self.labeled_loss + self.cons_loss + self.ent_loss
+
         with tf.control_dependencies(
             tf.get_collection(tf.GraphKeys.UPDATE_OPS)
         ):
@@ -185,6 +204,9 @@ class SSLFramework(object):
             "cons_multiplier": self.cons_multiplier,
             "accuracy": self.accuracy,
             "labeled_loss": self.labeled_loss,
+            #            "cons_loss": self.cons_loss,
+            #    "ent_loss": self.ent_loss,
+            #      "total_loss": self.total_loss,
             "lr": self.lr,
         }
 
