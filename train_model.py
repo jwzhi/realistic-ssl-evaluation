@@ -24,10 +24,12 @@ import numpy as np
 import tensorflow as tf
 from absl import logging
 from lib import data_provider
+from lib import data_provider_2
 from lib import dataset_utils
 from lib import tf_utils
 from lib import hparams
 from lib.ssl_framework import SSLFramework
+from lib.ssl_framework_2 import SSLFramework_2
 from lib import networks
 
 
@@ -46,6 +48,11 @@ flags.DEFINE_string(
     "svhn",
     "Name of dataset containing secondary data.",
 )
+flags.DEFINE_string(
+    "supervised_or_semi_supervised",
+    "semi_supervised",
+    "Name of whether to apply supervised learning or semi-supervised learning."
+                    )
 flags.DEFINE_integer("label_map_index", 0, "Index of the label map.")
 flags.DEFINE_integer(
     "n_labeled", 10000, "Number of labeled examples, or -1 for entire dataset."
@@ -144,19 +151,32 @@ def train(hps, result_dir, tuner=None, trial_name=None):
         labeled_data_filter_fn = make_labeled_data_filter_fn(label_table)
         unlabeled_data_filter_fn = make_unlabeled_data_filter_fn()
 
-        images, labels, _, _, _, _ = data_provider.get_simple_mixed_batch(
-            labeled_dataset_name=FLAGS.primary_dataset_name,
-            unlabeled_dataset_name=FLAGS.secondary_dataset_name,
-            split="train",
-            batch_size=FLAGS.batch_size,
-            shuffle_buffer_size=1000,
-            labeled_data_filter_fn=labeled_data_filter_fn,
-            unlabeled_data_filter_fn=unlabeled_data_filter_fn,
-        )
+        if FLAGS.supervised_or_semi_supervised == "semi_supervised":
+            images, labels, _, _, _, _ = data_provider.get_simple_mixed_batch(
+               labeled_dataset_name=FLAGS.primary_dataset_name,
+               unlabeled_dataset_name=FLAGS.secondary_dataset_name,
+               split="train",
+               batch_size=FLAGS.batch_size,
+               shuffle_buffer_size=1000,
+               labeled_data_filter_fn=labeled_data_filter_fn,
+               unlabeled_data_filter_fn=unlabeled_data_filter_fn,
+            )
+        else:
+            images, labels, _, _, _, _ = data_provider_2.do_not_get_simple_mixed_batch(
+                labeled_dataset_name=FLAGS.primary_dataset_name,
+                unlabeled_dataset_name=FLAGS.secondary_dataset_name,
+                split="train",
+                batch_size=FLAGS.batch_size,
+                shuffle_buffer_size=1000,
+                labeled_data_filter_fn=labeled_data_filter_fn,
+                unlabeled_data_filter_fn=unlabeled_data_filter_fn,
+            )
 
         logging.info("Training data tensors constructed.")
         # This is necessary because presently svhn data comes as uint8
         images = tf.cast(images, tf.float32)
+
+        if FLAGS.supervised_or_semi_supervised == "semi_supervised":
         ssl_framework = SSLFramework(
             networks.wide_resnet,
             hps,
@@ -166,6 +186,17 @@ def train(hps, result_dir, tuner=None, trial_name=None):
             consistency_model=FLAGS.consistency_model,
             zca_input_file_path=FLAGS.zca_input_file_path,
         )
+        else:
+        ssl_framework = SSLFramework_2(
+            networks.wide_resnet,
+            hps,
+            images,
+            labels,
+            make_train_tensors=True,
+            consistency_model=FLAGS.consistency_model,
+             zca_input_file_path=FLAGS.zca_input_file_path,
+        )
+
         tf.summary.scalar("n_labeled", FLAGS.n_labeled)
         tf.summary.scalar("batch_size", FLAGS.batch_size)
 
